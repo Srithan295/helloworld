@@ -1,38 +1,42 @@
 pipeline {
-  agent any
-  tools {
-    jdk 'jdk17'          // matches your Global Tool name
-    maven 'maven3'       // matches your Global Tool name
+  agent {
+    docker { image 'python:3.11-slim' }
   }
-  options {
-    skipDefaultCheckout(false)
-    timestamps()
-  }
+  options { timestamps() }
   stages {
     stage('Checkout') {
+      steps { checkout scm }
+    }
+    stage('Install') {
       steps {
-        checkout scm
+        sh 'python -m pip install --upgrade pip'
+        sh 'pip install -r requirements.txt || true'   // ok if file absent
+        sh 'pip install pytest pytest-cov build'
       }
     }
-    stage('Build & Test') {
+    stage('Lint & Test') {
       steps {
-        sh 'mvn -B -e -DskipTests=false clean verify'
+        sh '''
+          mkdir -p reports
+          pytest -q --junitxml=reports/junit.xml \
+                 --cov=. --cov-report=xml:reports/coverage.xml
+        '''
       }
       post {
         always {
-          junit testResults: '**/target/surefire-reports/*.xml', allowEmptyResults: true
-          recordIssues(tools: [spotBugs(pattern: '**/target/spotbugsXml.xml')]) // if using SpotBugs
+          junit 'reports/junit.xml'
+          archiveArtifacts artifacts: 'reports/**', fingerprint: true
+          // If you have Code Coverage API plugin:
+          // recordCoverage(tools: [coberturaAdapter('reports/coverage.xml')])
         }
       }
     }
-    stage('Package') {
+    stage('Package (optional)') {
       steps {
-        sh 'mvn -B package'
+        sh 'python -m build'   // creates dist/*.whl / *.tar.gz
       }
       post {
-        success {
-          archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
-        }
+        success { archiveArtifacts artifacts: 'dist/*', fingerprint: true }
       }
     }
   }
