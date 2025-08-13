@@ -1,0 +1,39 @@
+pipeline {
+  agent any
+  tools {
+    jdk 'jdk17'          // matches your Global Tool name
+    maven 'maven3'       // matches your Global Tool name
+  }
+  options {
+    skipDefaultCheckout(false)
+    timestamps()
+  }
+  stages {
+    stage('Checkout') {
+      steps {
+        checkout scm
+      }
+    }
+    stage('Build & Test') {
+      steps {
+        sh 'mvn -B -e -DskipTests=false clean verify'
+      }
+      post {
+        always {
+          junit testResults: '**/target/surefire-reports/*.xml', allowEmptyResults: true
+          recordIssues(tools: [spotBugs(pattern: '**/target/spotbugsXml.xml')]) // if using SpotBugs
+        }
+      }
+    }
+    stage('Package') {
+      steps {
+        sh 'mvn -B package'
+      }
+      post {
+        success {
+          archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
+        }
+      }
+    }
+  }
+}
