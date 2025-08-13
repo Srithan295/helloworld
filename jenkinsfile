@@ -1,0 +1,12 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('Builld') {
+            steps {
+                git 'https://github.com/Srithan295/helloworld.git'
+                bat 'mvnw clean compile'
+            }
+        }
+    }
+}
